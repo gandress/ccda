@@ -19,7 +19,7 @@ from parsers import demographics
 from parsers import medications
 from parsers import problems
 
-def parse_raw_ccda(source_file: str, members_file: str, medications_file: str, problems_file: str):
+def parse_raw_ccda_file(source_file: str, members_file: str, medications_file: str, problems_file: str):
     ''' Parse a given ccda xml source file.  Produces a limited extract of member data, medication data, and problem data.
         Each of the output types will be appended to the corresponding given file as flat csv.  In the case of multipl medications
         or problems, a new entry line will be created for each.  Each data element will be keyed by the patient identifier.  Each
@@ -30,10 +30,23 @@ def parse_raw_ccda(source_file: str, members_file: str, medications_file: str, p
     '''
     logging.info('Start parsing %s', source_file)
     with open(source_file, encoding='utf-8') as fh:
-        ccda_dict = xmltodict.parse(fh.read())
-    member_id, document_id = _extract_info_from_filename(source_file)
+        parse_raw_ccda_text(fh.read(), source_file, members_file, medications_file, problems_file)
+
+
+def parse_raw_ccda_text(source_content: str, source_name: str, members_file: str, medications_file: str, problems_file: str):
+    ''' Parse a given ccda xml source file.  Produces a limited extract of member data, medication data, and problem data.
+        Each of the output types will be appended to the corresponding given file as flat csv.  In the case of multipl medications
+        or problems, a new entry line will be created for each.  Each data element will be keyed by the patient identifier.  Each
+        row will have a source column to allow easy tracing back to the raw data.
+        Parsing discards other common sections (e.g. Care Plan, Chief Complaint, Encounters, Functional Status, Immunizations,
+        Declined Immunizations, Patient Instructions, Procedures, Results (Labs), Smoking Status, Vitals)
+        Assumes one member per file.  Member file will not filter for duplications.
+    '''
+    logging.info('Start parsing %s data', source_name)
+    member_id, document_id = _extract_info_from_filename(source_name)
+    ccda_dict = xmltodict.parse(source_content)
     if len(ccda_dict) != 1:
-        raise ValueError(f'Multiple member information found in {source_file}')
+        raise ValueError(f'Multiple member information found in {source_name}')
     demographic_info = demographics.extract_demographic_information_from(ccda_dict, member_id, document_id)
     medication_list = medications.extract_medication_information_from(ccda_dict, member_id, document_id)
     problem_list = problems.extract_problem_information_from(ccda_dict, member_id, document_id)
@@ -50,7 +63,7 @@ def parse_raw_ccda(source_file: str, members_file: str, medications_file: str, p
         writer = csv.writer(out_fh)
         for row in problem_list:
             writer.writerow(row)
-    logging.info('Done parsing %s', source_file)
+    logging.info('Done parsing %s', source_name)
 
 
 def _initialize_output_file(filename: str, expected_header: list[str]):
@@ -89,4 +102,4 @@ if __name__ == '__main__':
     if not os.path.exists(SOURCE):
         raise ValueError(f'{SOURCE} does not exist')
 
-    parse_raw_ccda(SOURCE, MEMBERS, MEDICATIONS, PROBLEMS)
+    parse_raw_ccda_file(SOURCE, MEMBERS, MEDICATIONS, PROBLEMS)
